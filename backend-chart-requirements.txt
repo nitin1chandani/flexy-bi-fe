@@ -1,0 +1,285 @@
+BACKEND REQUIREMENTS FOR CHART GENERATION
+==========================================
+
+This document outlines what your backend needs to implement to properly generate and send charts to the frontend.
+
+OVERVIEW
+--------
+The frontend has been updated to detect and render charts from AI responses. Your backend needs to send chart data in a specific format through WebSocket messages.
+
+SUPPORTED CHART FORMATS
+-----------------------
+The frontend now supports 3 different chart data formats:
+
+1. WebSocket Metadata Format (RECOMMENDED)
+2. Embedded JSON in Content  
+3. Direct Chart Object
+
+CHART DATA STRUCTURE
+-------------------
+All charts must follow this structure:
+
+{
+  "type": "pie" | "bar" | "line" | "scatter" | "doughnut",
+  "title": "Chart Title",
+  "data": {
+    "labels": ["Label1", "Label2", "Label3"],
+    "datasets": [{
+      "label": "Dataset Name",
+      "data": [100, 200, 300],
+      "backgroundColor": ["#FF6384", "#36A2EB", "#FFCE56"],
+      "borderColor": ["#FF6384", "#36A2EB", "#FFCE56"],
+      "borderWidth": 1
+    }]
+  },
+  "options": {
+    // Chart.js options (optional)
+  },
+  "insights": [
+    "Insight 1 about the data",
+    "Insight 2 about trends"
+  ]
+}
+
+IMPLEMENTATION OPTIONS
+=====================
+
+OPTION 1: WebSocket Metadata (RECOMMENDED)
+------------------------------------------
+Send chart data in the WebSocket message metadata field.
+
+WebSocket Message Format:
+{
+  "type": "ai_response",
+  "content": "Here's your sales analysis chart:",
+  "data": {
+    "chart_config": {
+      "type": "pie",
+      "title": "Sales Distribution by Region",
+      "data": {
+        "labels": ["North America", "Europe", "Asia Pacific"],
+        "datasets": [{
+          "label": "Sales",
+          "data": [45000, 32000, 28000],
+          "backgroundColor": ["#FF6384", "#36A2EB", "#FFCE56"]
+        }]
+      },
+      "insights": ["North America leads with 43% of total sales"]
+    }
+  }
+}
+
+Python Example:
+```python
+import json
+import asyncio
+from websockets import WebSocketServerProtocol
+
+async def send_chart_response(websocket: WebSocketServerProtocol, chart_data: dict, message: str):
+    response = {
+        "type": "ai_response",
+        "content": message,
+        "data": {
+            "chart_config": chart_data
+        }
+    }
+    await websocket.send(json.dumps(response))
+```
+
+OPTION 2: Embedded JSON in Content
+----------------------------------
+Include chart JSON directly in the message content.
+
+Example:
+```python
+content = f"""Here's your revenue analysis:
+
+{{
+    "chart_config": {{
+        "type": "bar",
+        "title": "Monthly Revenue Trend",
+        "data": {{
+            "labels": ["Jan", "Feb", "Mar", "Apr"],
+            "datasets": [{{
+                "label": "Revenue",
+                "data": [12000, 15000, 18000, 22000],
+                "backgroundColor": ["#36A2EB", "#36A2EB", "#36A2EB", "#36A2EB"]
+            }}]
+        }},
+        "insights": ["Revenue shows consistent 20% month-over-month growth"]
+    }}
+}}
+
+The data shows strong growth momentum."""
+
+response = {
+    "type": "ai_response", 
+    "content": content
+}
+```
+
+CHART TYPE SPECIFICATIONS
+========================
+
+PIE CHARTS
+----------
+- Use for: Proportional data, market share, category distribution
+- Required: labels, single dataset with data array
+- Colors: Provide backgroundColor array with one color per slice
+
+Example:
+{
+  "type": "pie",
+  "title": "Market Share by Product",
+  "data": {
+    "labels": ["Product A", "Product B", "Product C"],
+    "datasets": [{
+      "data": [40, 35, 25],
+      "backgroundColor": ["#FF6384", "#36A2EB", "#FFCE56"]
+    }]
+  }
+}
+
+BAR CHARTS
+----------
+- Use for: Comparisons, categorical data, time series
+- Required: labels, datasets with data arrays
+- Colors: backgroundColor for fill, borderColor for outline
+
+Example:
+{
+  "type": "bar",
+  "title": "Sales by Quarter",
+  "data": {
+    "labels": ["Q1", "Q2", "Q3", "Q4"],
+    "datasets": [{
+      "label": "Sales",
+      "data": [25000, 30000, 35000, 40000],
+      "backgroundColor": "#36A2EB"
+    }]
+  }
+}
+
+LINE CHARTS
+-----------
+- Use for: Trends over time, continuous data
+- Required: labels, datasets with data arrays
+- Colors: borderColor for line, backgroundColor for fill area
+
+Example:
+{
+  "type": "line",
+  "title": "Website Traffic Trend",
+  "data": {
+    "labels": ["Week 1", "Week 2", "Week 3", "Week 4"],
+    "datasets": [{
+      "label": "Visitors",
+      "data": [1200, 1500, 1800, 2100],
+      "borderColor": "#FF6384",
+      "backgroundColor": "rgba(255, 99, 132, 0.2)"
+    }]
+  }
+}
+
+BACKEND IMPLEMENTATION CHECKLIST
+================================
+
+□ 1. Update AI prompts to generate chart-appropriate responses
+□ 2. Implement chart data structure validation
+□ 3. Choose WebSocket message format (metadata vs embedded)
+□ 4. Add chart generation logic to your AI response handler
+□ 5. Ensure proper JSON serialization
+□ 6. Test with different chart types
+□ 7. Validate data arrays match label arrays
+□ 8. Include meaningful insights with charts
+□ 9. Handle edge cases (empty data, invalid types)
+□ 10. Add logging for chart generation debugging
+
+COMMON ISSUES TO AVOID
+=====================
+
+❌ Mismatched Arrays: Ensure data.length === labels.length
+❌ Invalid Chart Types: Only use supported types (pie, bar, line, scatter, doughnut)
+❌ Missing Required Fields: Always include type, title, data.labels, data.datasets
+❌ Invalid JSON: Ensure proper JSON formatting in embedded content
+❌ Color Format Issues: Use valid CSS colors (#hex, rgba(), named colors)
+
+TESTING YOUR IMPLEMENTATION
+===========================
+
+1. Send a simple pie chart first
+2. Verify chart renders in frontend
+3. Check browser console for parsing errors
+4. Test with multiple datasets
+5. Validate insights display correctly
+6. Test edge cases (empty data, long labels)
+
+EXAMPLE COMPLETE IMPLEMENTATION
+==============================
+
+```python
+def generate_sales_chart(sales_data):
+    """Generate a chart from sales data"""
+    
+    chart_config = {
+        "type": "bar",
+        "title": "Sales Performance by Region",
+        "data": {
+            "labels": list(sales_data.keys()),
+            "datasets": [{
+                "label": "Sales ($)",
+                "data": list(sales_data.values()),
+                "backgroundColor": ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0"]
+            }]
+        },
+        "insights": [
+            f"Total sales: ${sum(sales_data.values()):,}",
+            f"Top region: {max(sales_data, key=sales_data.get)} with ${max(sales_data.values()):,}"
+        ]
+    }
+    
+    return chart_config
+
+async def handle_chart_request(websocket, message):
+    """Handle user request for chart"""
+    
+    # Your AI processing logic here
+    sales_data = {"North": 45000, "South": 32000, "East": 38000, "West": 29000}
+    
+    chart_config = generate_sales_chart(sales_data)
+    
+    response = {
+        "type": "ai_response",
+        "content": "Here's your sales performance analysis:",
+        "data": {
+            "chart_config": chart_config
+        }
+    }
+    
+    await websocket.send(json.dumps(response))
+```
+
+FRONTEND DETECTION LOGIC
+========================
+
+The frontend now detects charts using these patterns:
+- "chart_config" in message content
+- "response_type": "chart" in message content  
+- "type": "pie|bar|line|scatter|doughnut" in message content
+- chart_config in WebSocket message metadata
+
+Your backend should use one of these patterns to ensure detection.
+
+NEXT STEPS
+==========
+
+1. Choose your preferred implementation option (metadata recommended)
+2. Update your AI response generation logic
+3. Test with the provided examples
+4. Monitor frontend console for any parsing errors
+5. Iterate based on user feedback
+
+For questions or issues, check the frontend console logs which will show:
+- Chart detection attempts
+- Parsing success/failure
+- Chart rendering status
